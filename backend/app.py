@@ -38,6 +38,7 @@ class VideoMeasurement(db.Model):
             'video_id': self.video_id,
             'measurement_date': self.measurement_date.isoformat(),
             'comments': self.comments,
+            'sub_count': self.sub_count,
             'subscribersgained': self.subscribersgained,
             'subscriberslost': self.subscriberslost,
             'unsub_views': self.unsub_views,
@@ -73,9 +74,25 @@ class Channel(db.Model):
 
 @app.route('/results', methods=['GET'])
 def results():
-    results = db.session.query(VideoMeasurement).all()
+    # Retrieve the latest video measurement for each video
+    latest_measurements = (
+        db.session.query(VideoMeasurement,
+                         db.func.max(VideoMeasurement.measurement_date))
+        .join(Video).join(Channel)
+        .group_by(Channel.id, VideoMeasurement.video_id)
+        .with_entities(VideoMeasurement,
+                       Video.title, Channel.name).all())
 
-    return(jsonify([result.as_json() for result in results]))
+    results = []
+
+    for result in latest_measurements:
+        if result:
+            json_measurement = result[0].as_json()
+            json_measurement['video_title'] = result[1]
+            json_measurement['channel_name'] = result[2]
+            results.append(json_measurement)
+
+    return jsonify(results)
 
 
 if __name__ == '__main__':
